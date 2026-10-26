@@ -14163,10 +14163,13 @@ function openEmailReport() {
   ov.hidden = false;
 
   const toIn = $('emailToInput');
+  const inEndpoint = ($('emailRelayUrl')?.value || '').trim();
+  const inToken = ($('emailRelayToken')?.value || '').trim();
   chrome.storage.sync.get(['emailLastTo', 'emailRelayUrl', 'emailRelayToken'], (res) => {
-    const configured = !!(res.emailRelayUrl && res.emailRelayToken);
+    const configured = !!(inEndpoint && inToken) || !!(res.emailRelayUrl && res.emailRelayToken);
     const cfgBtn = $('emailReportConfigBtn');
     if (cfgBtn) cfgBtn.hidden = configured;
+    if (!configured) emailSetStatus('info', 'Set your relay URL + token in Settings → Email Report, then reopen this dialog.');
     if (toIn) {
       toIn.value = res.emailLastTo || '';
       toIn.focus();
@@ -14196,8 +14199,18 @@ function sendEmailReport() {
   if (btn) btn.disabled = true;
   emailSetStatus('info', 'Sending… generating report & delivering via SMTP relay');
 
+  // Pass the relay config from the Settings inputs so a send never fails on
+  // "not saved yet". Also persist it automatically for future sends.
+  const endpoint = ($('emailRelayUrl')?.value || '').trim();
+  const token = ($('emailRelayToken')?.value || '').trim();
+  if (endpoint || token) {
+    try { chrome.storage.sync.set({ emailRelayUrl: endpoint, emailRelayToken: token }); } catch (_) {}
+  }
+
   chrome.runtime.sendMessage({
     action: 'EMAIL_SEND_REPORT',
+    endpoint: endpoint || undefined,
+    token: token || undefined,
     to, subject,
     body: message,
     fileName: _emailAttach.fileName,
